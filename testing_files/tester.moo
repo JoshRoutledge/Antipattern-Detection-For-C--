@@ -1,0 +1,1 @@
+while (10) cows\nmoo
