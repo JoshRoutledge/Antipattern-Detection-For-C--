@@ -13,7 +13,17 @@ export function activate(context: vscode.ExtensionContext) {
 		
 		vscode.window.showInformationMessage('Checking for common antipatterns.');
 		let moo = require('moo');
-	
+		let moo_lexer = moo.compile({
+			WS:      /[ \t]+/,
+			comment: /\/\/.*?$/,
+			number:  /0|[1-9][0-9]*/,
+			string:  /"(?:\\["\\]|[^\n"\\])*"/,
+			lparen:  '(',
+			rparen:  ')',
+			keyword: ['while', 'if', 'else', 'moo', 'cows'],
+			NL:      { match: /\n/, lineBreaks: true },
+		});
+
 		var opPat = [
 			// operators
 			'(',')', '[', ']', '{', '}',
@@ -46,6 +56,89 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 			
 
+		// let my_lexer = moo.compile({
+		// 	endL: ';',
+		// 	ws: /\s/,
+		// 	lbracket: '{',
+		// 	rbracket: '}',
+		// 	other: /w*/,
+		// 	keyword: ['class'],
+		// 	myError: moo.error,
+		// });
+
+		// let my_other_lexer = moo.compile({
+		// 	keyword: ['class'],
+		// 	WS:      /[ \t]+/,
+		// 	comment: /\/\/.*?$/,
+		// 	number:  /0|[1-9][0-9]*/,
+		// 	string:  /"(?:\\["\\]|[^\n"\\])*"/,
+		// 	lparen:  '(',
+		// 	rparen:  ')',
+		// 	NL:      { match: /\n/, lineBreaks: true },
+		// });
+		
+
+		
+		
+		// var pythonLexer = moo.compile({
+		// 	Whitespace: /[ ]+/, // TODO tabs
+		// 	NAME: /[A-Za-z_][A-Za-z0-9_]*/,
+		// 	OP: opPat,
+		// 	COMMENT: /#.*/,
+		// 	NEWLINE: { match: /\r|\r\n|\n/, lineBreaks: true },
+		// 	Continuation: /\\/,
+		// 	ERRORTOKEN: {match: /[\$?`]/, error: true},
+		// 	// TODO literals: str, long, float, imaginary
+		// 	NUMBER: [
+		// 	  /(?:[0-9]+(?:\.[0-9]+)?e-?[0-9]+)/, // 123[.123]e[-]123
+		// 	  /(?:(?:0|[1-9][0-9]*)?\.[0-9]+)/,   // [123].123
+		// 	  /(?:(?:0|[1-9][0-9]*)\.[0-9]*)/,    // 123.[123]
+		// 	  /(?:0|[1-9][0-9]*)/,              // 123
+		// 	],
+		// 	STRING: [
+		// 	  {match: /"""[^]*?"""/, lineBreaks: true, value: x => x.slice(3, -3)},
+		// 	  {match: /"(?:\\["\\rn]|[^"\\\n])*?"/, value: x => x.slice(1, -1)},
+		// 	  {match: /'(?:\\['\\rn]|[^'\\\n])*?'/, value: x => x.slice(1, -1)},
+		// 	],
+		//   });
+
+		
+
+		//identify a class
+		//identify a function's parameters (and which function they belong to)
+		//identify a function declaration (and which class it belongs to)
+		//identify a function call (and which function it belongs to)
+		//identify a line of code (and which function it belongs to)
+		//identify and ignore comments, keywords, whitespace, etc.
+		//identify conditional statements...
+
+		//complicated conditional statements (we might look for if's, whiles, and fors and then just check their conditions)
+
+
+		
+		// const workspaceFolders = vscode.workspace.workspaceFolders;
+
+        // if (workspaceFolders && workspaceFolders.length > 0) {
+        //     const workspaceFolder = workspaceFolders[0].uri.fsPath;
+        //     const files = await readFilesInDirectory(workspaceFolder);
+
+        //     // Print file names
+        //     files.forEach(file => {
+        //         console.log(file); // or use vscode.window.showInformationMessage for UI messages
+        //     });
+
+        //     vscode.window.showInformationMessage(`Found ${files.length} files. Check the Debug Console for file names.`);
+        // } else {
+        //     vscode.window.showInformationMessage('No workspace folder is open.');
+        // }
+
+		// const folderUri = await vscode.window.showOpenDialog({
+		// 	canSelectFolders: true,
+		// 	canSelectFiles: false,
+		// 	canSelectMany: false,
+		// 	openLabel: 'Select Folder'
+		// });
+
 		const workspaceFolders = vscode.workspace.workspaceFolders;
 	
 
@@ -64,6 +157,8 @@ export function activate(context: vscode.ExtensionContext) {
 		const workspaceFolder = workspaceFolders[0].uri.fsPath;
 		const files = await readFilesInDirectory(workspaceFolder);
 
+		
+
 		// Print file names
 		files.forEach(file => {
 			vscode.workspace.openTextDocument(file).then((document) => {
@@ -74,6 +169,16 @@ export function activate(context: vscode.ExtensionContext) {
 
 				var token = cpp_lexer.next();
 				let fileTokens: Array<String>;
+
+				//array of classes
+				// var classes: Array<CppClass>;
+				//array of func
+				// var functions: Array<CppFunction>;
+
+				//current class
+				// var current_class: Array<String>;
+				//current func
+				// var current_func: Array<String>;
 
 				var current_class = null;
 				var current_func = null;
@@ -93,6 +198,25 @@ export function activate(context: vscode.ExtensionContext) {
 					//if next token is { then delcaration -> switch current func
 					//if next token is ; then call -> add call to current func
 					//if ; -> add line to current class and func
+
+					/*
+					class CppClass {
+						name:string
+						lines:int
+						functions:CppFunction[]
+					}
+
+					class CppFunction{
+						name:string
+						lines:int
+						class:CppClass
+						calls:CppFunction[]
+					}
+
+					classes:CppClass[]
+					funcs:CppFunction[]
+					*/
+
 
 					if (token.type === "class"){
 						// console.log("Found class -> need to set current class to this one");
@@ -176,7 +300,6 @@ export function activate(context: vscode.ExtensionContext) {
 					
 					token = cpp_lexer.next();
 				};
-				
 				god_class(classes, funcs);
 				feature_envy(classes, funcs);
 				duplicate_code(classes, funcs);
@@ -193,6 +316,23 @@ export function activate(context: vscode.ExtensionContext) {
 			console.log(file); // or use vscode.window.showInformationMessage for UI messages
 		});
 
+		// if(!vscode.window.activeTextEditor){
+		// 	console.log('There are no active domuments');
+		// 	return;
+		// }
+
+		// let active_document = vscode.window.activeTextEditor.document.uri;
+
+		// if(!(active_document.scheme === 'file')){
+		// 	console.log('The active document is not a compatible');
+		// 	return;
+		// }
+
+		// vscode.workspace.openTextDocument(active_document).then((document) => {
+		// 	let rawText = document.getText();
+		// 	console.log(document.lineCount);
+		// 	console.log(rawText);
+		// });
 	});
 
 	context.subscriptions.push(disposable);
@@ -227,58 +367,47 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
  }
 
  function god_class(classes: CppClass[], funcs:CppFunction[]){
-	console.log("god class not implemented");
-	//EASY - Routledge
+	console.log()
  }
 
  function feature_envy(classes: CppClass[], funcs:CppFunction[]){
-	console.log("feature envy class not implemented");
-	//EASY - Routledge
+	
  }
 
  function duplicate_code(classes: CppClass[], funcs:CppFunction[]){
-	console.log("duplicate code class not implemented");
-	//Doesn't use parser...
+	
  }
 
  function refused_bequest(classes: CppClass[], funcs:CppFunction[]){
-	console.log("refused bequest class not implemented");
-	//Inheritance.. oof
+	
  }
 
  function divergent_change(classes: CppClass[], funcs:CppFunction[]){
-	console.log("diveregent change class not implemented");
-	//Difficult update parser
+	
  }
 
  function shotgun_surgery(classes: CppClass[], funcs:CppFunction[]){
-	console.log("shotgun surgery class not implemented");
-	//Difficult update parser
+	
  }
 
  function parallel_inheritance(classes: CppClass[], funcs:CppFunction[]){
-	console.log("parallel inher not implemented");
-	//inheritance
+	
  }
 
  function functional_decomposition(classes: CppClass[], funcs:CppFunction[]){
-	console.log("functional decomp not implemented");
-
+	
  }
 
  function spaghetti_code(classes: CppClass[], funcs:CppFunction[]){
-	console.log("spaghetti code not implemented");
-	//Easy - Peterson
+	
  }
 
  function swiss_army_knife(classes: CppClass[], funcs:CppFunction[]){
-	console.log("swiss army knife not implemented");
-	//Easy - Peterson
+	
  }
 
  function type_checking(classes: CppClass[], funcs:CppFunction[]){
-	console.log("type checking not implemented");
-	//Doesn't use parser
+	
  }
 
 // This method is called when your extension is deactivated
