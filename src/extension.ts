@@ -210,6 +210,7 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
             // Optionally filter file types here (e.g., if you want only TypeScript files, check the file extension)
 			// if(file.name.endsWith('.cpp') || file.name.endsWith('.c')){
 			if(file.name.endsWith('.cpp')){
+				console.log(file.name);
             	files.push(filePath);
 			}
         }
@@ -267,7 +268,43 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
  }
 
  function spaghetti_code(classes: CppClass[], funcs:CppFunction[]){
-	console.log("spaghetti code not implemented");
+	// console.log("spaghetti code not implemented");
+	const SPAGHETTI_LINES = 10;
+	const SPAGHETTI_FUNCS = 1;
+
+	/*
+	Spaghetti code is revealed by classes with
+	no structure,
+	declaring long methods with no parameters,
+	utilizing global variables (this may need updates to the parser),
+	names of functions may suggest procedural programming (this would require too much work),
+
+	*/
+
+
+	//foreach class
+	classes.forEach(c => {
+		let n = 0;
+		c.functions.forEach(f => {
+			if (f.lines > SPAGHETTI_LINES) {
+				console.log(f.name + " has enough lines");
+				if (f.name.includes("()")){
+					console.log(f.name + " has no parameters");
+					n = n + 1;
+				}
+			}
+		});
+		if (n > SPAGHETTI_FUNCS) {
+			console.log(c.name + " exhibits spaghetti code antipattern")
+		}
+		else {
+			console.log(c.name + " does not exhibit spaghetti code")
+		}
+	});
+
+	//does it have long methods without parameters
+
+
 	//Easy - Peterson
  }
 
