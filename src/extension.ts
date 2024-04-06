@@ -9,7 +9,7 @@ import {CppClass, CppFunction} from "./CppClass";
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 
-	let disposable = vscode.commands.registerCommand('antitest.checkantipatterns', async () => {
+	let disposable1 = vscode.commands.registerCommand('antitest.checkantipatterns', async () => {
 		
 		vscode.window.showInformationMessage('Checking for common antipatterns.');
 		let moo = require('moo');
@@ -32,15 +32,20 @@ export function activate(context: vscode.ExtensionContext) {
 		  ];
 
 		let cpp_lexer = moo.compile({
-			WS:      /[ \t]+/,
+			WS:      {match: /\s+/, lineBreaks: true},
+			comment: /\/\/.*?$/,
+			string:  /"(?:\\["\\rn]|[^"\\\n])*?"/,
 			lbracket: '{',
 			rbracket: '}',
 			endLine: ';',
+			includeStatement: /#include\s+<[A-Za-z]+>/,
+			scopeResolution: /[\w]+::[\w]+(?:[\s]*\([\w]*\))?/,  	// CLASS::METHOD() and std::endl
+			member: /[\w]+\.[\w]+[\s]*\([\w]*\)/,
 			keyword: ['int', 'return'],
-			class: /class\s+[A-Za-z_]\w*/,
-			func: /[A-Za-z]\w*\([\w\s,]*\)/,
+			class: {match: /class\s+[A-Za-z_]\w*/},
+			func: {match: /[A-Za-z]\w*\([\w\s,]*\)/},
 			NL:      { match: /[\n\r]/, lineBreaks: true },
-			STRING: /[\w]+/,
+			variable: /[\w]+/,
 			op: opPat,
 			myError: moo.error,
 		});
@@ -64,6 +69,9 @@ export function activate(context: vscode.ExtensionContext) {
 		const workspaceFolder = workspaceFolders[0].uri.fsPath;
 		const files = await readFilesInDirectory(workspaceFolder);
 
+		
+		let all_classes: CppClass[] = [];
+
 		// Print file names
 		files.forEach(file => {
 			vscode.workspace.openTextDocument(file).then((document) => {
@@ -73,7 +81,7 @@ export function activate(context: vscode.ExtensionContext) {
 				// lexer.next();
 
 				var token = cpp_lexer.next();
-				let fileTokens: Array<String>;
+				// let fileTokens: Array<String>;
 
 				var current_class = null;
 				var current_func = null;
@@ -82,10 +90,8 @@ export function activate(context: vscode.ExtensionContext) {
 				let bracketSkips: number = 0;
 
 				while(token){
-
-					// console.log(token);
+					//console.log(token);
 					//WS, NL, keyword, STRING, op -> ignore
-
 					//if class -> switch current class
 					//if } and current func != NULL -> close func
 					//if } and current class != NULL -> close class
@@ -102,7 +108,7 @@ export function activate(context: vscode.ExtensionContext) {
 						console.log("Created class: " + name);
 						token = skipWhiteSpace(cpp_lexer);
 						if (token.type !== "lbracket") {
-							console.log("BAD NEWS BEARS NO LBRACKET AFTER CLASS")
+							console.log("BAD NEWS BEARS NO LBRACKET AFTER CLASS");
 						}
 						
 					}
@@ -116,16 +122,20 @@ export function activate(context: vscode.ExtensionContext) {
 							if (current_class !== null) {
 								current_class.addFunc(current_func);
 							}
+							// console.log("Func closed: " + current_func.name);
 							current_func = null;
 						}
 						else if (current_class !== null) {
 							classes = [...classes, current_class];
+							all_classes = [...all_classes, current_class];
+							// console.log("Class closed: " + current_class.name);
 							current_class = null;
 						}
 						else {
 							console.log(token);
 							console.log("Invalid Cpp me thinks");
 						}
+						
 					}
 					else if (token.type === "lbracket") {
 						// console.log("found { -> nothing required this should only follow class");
@@ -134,7 +144,7 @@ export function activate(context: vscode.ExtensionContext) {
 					else if (token.type === "func") {
 						// console.log("found func -> is this a call or a declaration");
 						let temp = token;
-						token = cpp_lexer.next();
+						token = skipWhiteSpace(cpp_lexer); // changed to remove whitespace
 						if (token.type === "lbracket"){
 							// console.log("This is a function declaration -> switch active function");
 							//TODO we need to get the correct name here
@@ -144,50 +154,51 @@ export function activate(context: vscode.ExtensionContext) {
 						else if (token.type === "endLine"){
 							// console.log("; function call -> increment lines, and add call dependency");
 							if (current_class === null){
-								console.log("invalid cpp");
+								console.log("invalid cpp"); 
 							}
 							else{
-								current_func!.addLines(1);
-								current_func!.addFuncName(temp.value); //TODO this needs some work
+								if (current_func !== null){
+									current_func!.addLines(1);
+									current_func!.addFuncName(temp.value); //TODO this needs some work
+								}
 								if (current_class !== null) {
 									current_class.addLines(1);
 								}
 							}
 						}
-						else {
-							console.log(token);
-							console.log("should never be printed");
-						}
+						// else {
+						// 	console.log(token);
+						// 	console.log("should never be printed"); // can be hit such as on pow(2, i) << ... line 41 spaghetti.cpp
+						// }
 					}
 					else if (token.type === "endLine"){
 						// console.log("; -> increment line on current class and func");
-						if (current_class !== null) {
-							current_class.addLines(1);
-						}
-
 						if (current_func !== null) {
 							current_func.addLines(1);
 						}
-						
+
+						if (current_class !== null) {
+							current_class.addLines(1);
+						}
 					}
 					else{
 						// console.log(token.type + " not parsed");
 					}
 					
-					token = cpp_lexer.next();
+					token = skipWhiteSpace(cpp_lexer);
 				};
 				
-				god_class(classes, funcs);
-				feature_envy(classes, funcs);
-				duplicate_code(classes, funcs);
-				refused_bequest(classes, funcs);
-				divergent_change(classes, funcs);
-				shotgun_surgery(classes, funcs);
-				parallel_inheritance(classes, funcs);
-				functional_decomposition(classes, funcs);
+				// god_class(classes, funcs);
+				// feature_envy(classes, funcs);
+				// duplicate_code(classes, funcs);
+				// refused_bequest(classes, funcs);
+				// divergent_change(classes, funcs);
+				// shotgun_surgery(classes, funcs);
+				// parallel_inheritance(classes, funcs);
+				// functional_decomposition(classes, funcs);
 				spaghetti_code(classes, funcs);
-				swiss_army_knife(classes, funcs);
-				type_checking(classes, funcs);
+				// swiss_army_knife(classes, funcs);
+				// type_checking(classes, funcs);
 
 			});
 			console.log(file); // or use vscode.window.showInformationMessage for UI messages
@@ -195,7 +206,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	});
 
-	context.subscriptions.push(disposable);
+	context.subscriptions.push(disposable1);
 }
 
 async function readFilesInDirectory(dir: string): Promise<string[]> {
@@ -207,8 +218,6 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
         if (file.isDirectory()) {
             files = files.concat(await readFilesInDirectory(filePath));
         } else {
-            // Optionally filter file types here (e.g., if you want only TypeScript files, check the file extension)
-			// if(file.name.endsWith('.cpp') || file.name.endsWith('.c')){
 			if(file.name.endsWith('.cpp')){
 				console.log(file.name);
             	files.push(filePath);
@@ -220,9 +229,12 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 }
 
  function skipWhiteSpace(cpp_lexer: any){
+	
 	var token = cpp_lexer.next();
+	if (token === undefined) {return null;}
 	while (token.type === "WS") {
 		token = cpp_lexer.next();
+		if(token === undefined){return null;}
 	}
 	return token;
  }
@@ -295,10 +307,10 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 			}
 		});
 		if (n > SPAGHETTI_FUNCS) {
-			console.log(c.name + " exhibits spaghetti code antipattern")
+			console.log(c.name + " exhibits spaghetti code antipattern");
 		}
 		else {
-			console.log(c.name + " does not exhibit spaghetti code")
+			console.log(c.name + " does not exhibit spaghetti code");
 		}
 	});
 
