@@ -90,7 +90,15 @@ export function activate(context: vscode.ExtensionContext) {
 				let bracketSkips: number = 0;
 
 				while(token){
-					console.log(token);
+					//console.log(token);
+					//WS, NL, keyword, STRING, op -> ignore
+					//if class -> switch current class
+					//if } and current func != NULL -> close func
+					//if } and current class != NULL -> close class
+					//if func Is this a declaration or a call?
+					//if next token is { then delcaration -> switch current func
+					//if next token is ; then call -> add call to current func
+					//if ; -> add line to current class and func
 
 					if (token.type === "class"){
 						// console.log("Found class -> need to set current class to this one");
