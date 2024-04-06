@@ -16,10 +16,6 @@
       {
         "command": "antitest.checkantipatterns",
         "title": "Check for Antipatterns"
-      },
-      {
-        "command": "antitest.checkantipatterns2",
-        "title": "Modified Check for Antipatterns"
       }
     ]
   },

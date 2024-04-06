@@ -25,6 +25,7 @@ class TestClass {
     }
 };
 
+// Description of Anouter Class
 class AnoutherClass {
     public:
         void undefinedMethod();
@@ -32,8 +33,8 @@ class AnoutherClass {
 };
 
 void AnoutherClass::undefinedMethod() {
-    cout << "Now Im Defined";
-    string findMe = "did you find me";
+    std::cout << "Now Im Defined";
+    std::string findMe = "I should be \" one \" string" + "I should be a seperate string" ;
 }
 
 int main() {
