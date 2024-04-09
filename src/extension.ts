@@ -3,14 +3,66 @@ import * as vscode from 'vscode';
 import { readdir, readFile } from 'fs/promises';
 import * as path from 'path';
 // import {CppFunction} from "./CppFunction";
-import {CppClass, CppFunction} from "./CppClass";
+import {CppClass, CppFunction, Variable} from "./CppClass";
+
+let DEBUG = true;
+let all_classes: CppClass[] = [];
+let classless_functions: CppFunction[] = [];
+/*
+	Primatives :
+	"int",
+	"double",
+	"byte",
+	"short",
+	"char",
+	"long",
+	"float",
+	"boolean",
+	"void"
+
+	Collections:
+	Array<type>
+
+*/
+
+
+
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 
-	let disposable1 = vscode.commands.registerCommand('antitest.checkantipatterns', async () => {
+	let disposable2 = vscode.commands.registerCommand('antitest.checkantipatterns', async () => {
+
+		// let primatives = [	"int",
+		// 					"double",
+		// 					"byte",
+		// 					"short",
+		// 					"char",
+		// 					"long",
+		// 					"float",
+		// 					"boolean",
+		// 					"void"];
+
+		// let collections = [ "array" ];
+
 		
+
+		function paramTypes(s:string){
+			var split_str = s.replace(/[^\w\,\s]/g, "").split(",");
+			var parameters:Variable[] = [];
+
+			split_str.forEach(str => {
+				var arr = str.split(" ");
+				if( arr.length > 2 ){
+					arr = arr.slice(1);
+				}
+				parameters.push(new Variable(arr[0], arr[1]));
+			});
+
+			return parameters;
+		}
+
 		vscode.window.showInformationMessage('Checking for common antipatterns.');
 		let moo = require('moo');
 	
@@ -33,26 +85,39 @@ export function activate(context: vscode.ExtensionContext) {
 
 		let cpp_lexer = moo.compile({
 			WS:      {match: /\s+/, lineBreaks: true},
-			comment: /\/\/.*?$/,
+			comment: [{match: /\/\/.*?$/},
+					  {match: /\/\*[^\*\/"]*?\*\//}],
 			string:  /"(?:\\["\\rn]|[^"\\\n])*?"/,
 			lbracket: '{',
 			rbracket: '}',
 			endLine: ';',
 			includeStatement: /#include\s+<[A-Za-z]+>/,
-			scopeResolution: /[\w]+::[\w]+(?:[\s]*\([\w]*\))?/,  	// CLASS::METHOD() and std::endl
-			member: /[\w]+\.[\w]+[\s]*\([\w]*\)/,
-			keyword: ['int', 'return'],
-			class: {match: /class\s+[A-Za-z_]\w*/},
-			func: {match: /[A-Za-z]\w*\([\w\s,]*\)/},
+			keyword: ['return'],
+			class: {match: /class\s+[A-Za-z_]\w*/, value: (s: string) => s.replace(/class/, "").replace(/\s/g, "")},
+			func: [{match: /[A-Za-z]\w*\s[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => s.slice(s.split(" ")[0].length + 1).split(")")[0]},
+				   {match: /[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => s.split(")")[0]}],
+			// func: {match: /[A-Za-z]\w*\([\w\s,]*\)/},
+			externalDefinition: {match: /\w+::\w+\s*\(\w*\)/},  	// scopeResolution for CLASS::METHOD() //TODO ADD
+			member_func: [{match: /\w+\.\w+\s*\(\w*\)/, value: (s: string) => s.replace(/\./, " ")}, // doesnt handle OBJ.FUNC1().FUNC2()
+					 {match: /\w+\-\>\w+\s*\(\w*\)/, value: (s: string) => s.replace(/\-\>/, " ")}],
+			member_var: [{match: /\w+\.\w+/, value: (s: string) => s.replace(/\./, " ")}, 
+					{match: /\w+\-\>\w+/, value: (s: string) => s.replace(/\-\>/, " ")}], 
 			NL:      { match: /[\n\r]/, lineBreaks: true },
-			variable: /[\w]+/,
+			variableDeclaration: [{match: /\w+\s\w+/},
+								{match: /\w+(?:::\w+)+\<\w+(?:::\w+)+\>\s\w+/}
+								// {match: /[\w(\:\:)]+\<[\w(\:\:)]+\>\s\w+/}
+			],
+			variable: [{match: /\w+::\w+/},
+					   {match: /::\w*/, value: (s: string) => s.slice(2)},
+					   { match: /\w+/}],
+			// scopeResolution: ,  	// scopeResolution for CLASS::METHOD such as std::endl but could also be a variable //TODO ADD
 			op: opPat,
-			myError: moo.error,
+			ERROR: moo.error,
+			// Namespace
+			// Inheritence
 		});
-			
-
+		
 		const workspaceFolders = vscode.workspace.workspaceFolders;
-	
 
 		if (!workspaceFolders || workspaceFolders.length === 0){
 			console.log('No workspace is selected');
@@ -65,23 +130,27 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		//get a file open
-
 		const workspaceFolder = workspaceFolders[0].uri.fsPath;
 		const files = await readFilesInDirectory(workspaceFolder);
-
-		
-		let all_classes: CppClass[] = [];
 
 		// Print file names
 		files.forEach(file => {
 			vscode.workspace.openTextDocument(file).then((document) => {
 				let rawText = document.getText();
 				cpp_lexer.reset(rawText);
-				console.log(cpp_lexer);
-				// lexer.next();
-
+				DEBUG && console.log(cpp_lexer);
 				var token = cpp_lexer.next();
-				// let fileTokens: Array<String>;
+
+				// Set token to the next non-whitespace token
+				function next(){
+					token = cpp_lexer.next();
+					if (token === undefined) {token = null; return;}
+					while (token.type === "WS") {
+						token = cpp_lexer.next();
+						if(token === undefined){token = null; return;}
+					}
+					return;
+				}	
 
 				var current_class = null;
 				var current_func = null;
@@ -90,30 +159,18 @@ export function activate(context: vscode.ExtensionContext) {
 				let bracketSkips: number = 0;
 
 				while(token){
-					//console.log(token);
-					//WS, NL, keyword, STRING, op -> ignore
-					//if class -> switch current class
-					//if } and current func != NULL -> close func
-					//if } and current class != NULL -> close class
-					//if func Is this a declaration or a call?
-					//if next token is { then delcaration -> switch current func
-					//if next token is ; then call -> add call to current func
-					//if ; -> add line to current class and func
-
-					if (token.type === "class"){
-						// console.log("Found class -> need to set current class to this one");
-						// current_class = ;
-						var name = token.value.split(" ").slice(-1); 
-						current_class = new CppClass(name); //TODO this likely is wrong
-						console.log("Created class: " + name);
-						token = skipWhiteSpace(cpp_lexer);
+					DEBUG && console.log(token);
+					switch(token.type){
+					case 'class':
+						current_class = new CppClass(token.value);
+						DEBUG && console.log("Created class: " + token.value);
+						next();
 						if (token.type !== "lbracket") {
 							console.log("BAD NEWS BEARS NO LBRACKET AFTER CLASS");
 						}
-						
-					}
-					else if (token.type === "rbracket") {
-						// console.log("found } -> need to end function or class");
+						break;
+
+					case 'rbracket':
 						if (bracketSkips > 0) {
 							bracketSkips = bracketSkips - 1;
 						}
@@ -121,93 +178,125 @@ export function activate(context: vscode.ExtensionContext) {
 							funcs = [...funcs, current_func];
 							if (current_class !== null) {
 								current_class.addFunc(current_func);
+							} else {
+								classless_functions = [...classless_functions, current_func];
 							}
-							// console.log("Func closed: " + current_func.name);
 							current_func = null;
 						}
 						else if (current_class !== null) {
 							classes = [...classes, current_class];
 							all_classes = [...all_classes, current_class];
-							// console.log("Class closed: " + current_class.name);
 							current_class = null;
 						}
 						else {
 							console.log(token);
 							console.log("Invalid Cpp me thinks");
 						}
-						
-					}
-					else if (token.type === "lbracket") {
-						// console.log("found { -> nothing required this should only follow class");
+						break;
+
+					case 'lbracket':
 						bracketSkips = bracketSkips + 1;
-					}
-					else if (token.type === "func") {
-						// console.log("found func -> is this a call or a declaration");
-						let temp = token;
-						token = skipWhiteSpace(cpp_lexer); // changed to remove whitespace
-						if (token.type === "lbracket"){
-							// console.log("This is a function declaration -> switch active function");
-							//TODO we need to get the correct name here
-							current_func = new CppFunction(temp.value, current_class);
-							console.log("Created function: " + temp.value);
+						break;
+
+					case 'func':
+						var split_str = token.value.split("(");
+						var name = split_str[0];
+						if(split_str[1].length > 1){
+							var parameters = paramTypes(split_str[1].replace(")",""));
 						}
-						else if (token.type === "endLine"){
-							// console.log("; function call -> increment lines, and add call dependency");
-							if (current_class === null){
-								console.log("invalid cpp"); 
-							}
-							else{
-								if (current_func !== null){
-									current_func!.addLines(1);
-									current_func!.addFuncName(temp.value); //TODO this needs some work
-								}
-								if (current_class !== null) {
-									current_class.addLines(1);
-								}
-							}
+						else{
+							var parameters:Variable[] = [];
 						}
-						// else {
-						// 	console.log(token);
-						// 	console.log("should never be printed"); // can be hit such as on pow(2, i) << ... line 41 spaghetti.cpp
-						// }
-					}
-					else if (token.type === "endLine"){
-						// console.log("; -> increment line on current class and func");
+						current_func = new CppFunction(name, current_class, parameters);
+						break;
+
+					case 'endLine':
+						if (current_func !== null) { current_func.addLines(1); }
+						if (current_class !== null) { current_class.addLines(1); }
+						break;
+
+						case 'member_func':
+							var split_str = token.value.split(" ", 2);
+							
+							if (current_func !== null) {
+								current_func.varToFunc(split_str[0], split_str[1]);
+							}
+							else if (current_class !== null) {
+								current_class.varToFunc(split_str[0], split_str[1]);
+							}
+							break;
+	
+						case 'member_var':
+							var split_str = token.value.split(" ", 2);
+							var classType = "UNKNOWN";
+							var c:any;
+							for(c in all_classes){
+								if(c.name === split_str[1]){
+									classType = c.type;
+								}
+							}
+							var attribute:Variable = new Variable(classType, split_str[1]);
+							
+							if (current_func !== null) {
+								current_func.addAttributes(attribute);
+							}
+							else if (current_class !== null) {
+								current_class.addAttributes(attribute);
+							}
+							break;
+		
+						case 'variableDeclaration':
+						var split_str = token.value.split(" ", 2);
+						var attribute = new Variable(split_str[0], split_str[1]);
+
 						if (current_func !== null) {
-							current_func.addLines(1);
+							current_func.addAttributes(attribute);
 						}
+						else if (current_class !== null) {
+							current_class.addAttributes(attribute);
+						}
+						break;
 
-						if (current_class !== null) {
-							current_class.addLines(1);
-						}
+					case 'variable':
+						
+						break;
+
+					case 'ERROR':
+						DEBUG && console.log("An error occured while parsing: " + token.value);
+						break;
+
+					default:
+
 					}
-					else{
-						// console.log(token.type + " not parsed");
-					}
-					
-					token = skipWhiteSpace(cpp_lexer);
-				};
+
+					next();
+				}
 				
-				// god_class(classes, funcs);
-				// feature_envy(classes, funcs);
-				// duplicate_code(classes, funcs);
-				// refused_bequest(classes, funcs);
-				// divergent_change(classes, funcs);
-				// shotgun_surgery(classes, funcs);
-				// parallel_inheritance(classes, funcs);
-				// functional_decomposition(classes, funcs);
-				spaghetti_code(classes, funcs);
-				// swiss_army_knife(classes, funcs);
-				// type_checking(classes, funcs);
-
 			});
-			console.log(file); // or use vscode.window.showInformationMessage for UI messages
+			DEBUG && console.log(file);
 		});
+		
+	});
 
+	let disposable1 = vscode.commands.registerCommand('antitest.checkclasses', async () => {
+
+		// god_class(all_classes, classless_functions);
+		feature_envy(all_classes, classless_functions);
+		// duplicate_code(all_classes, classless_functions);
+		// refused_bequest(all_classes, classless_functions;
+		// divergent_change(all_classes, classless_functions);
+		// shotgun_surgery(all_classes, classless_functions);
+		// parallel_inheritance(all_classes, classless_functions);
+		// functional_decomposition(all_classes, classless_functions);
+		// spaghetti_code(all_classes, classless_functions);
+		// swiss_army_knife(all_classes, classless_functions);
+		// type_checking(all_classes, classless_functions);
 	});
 
 	context.subscriptions.push(disposable1);
+	context.subscriptions.push(disposable2);
 }
+
 
 async function readFilesInDirectory(dir: string): Promise<string[]> {
     let filesInDirectory = await readdir(dir, { withFileTypes: true });
@@ -219,7 +308,7 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
             files = files.concat(await readFilesInDirectory(filePath));
         } else {
 			if(file.name.endsWith('.cpp')){
-				console.log(file.name);
+				DEBUG && console.log(file.name);
             	files.push(filePath);
 			}
         }
@@ -228,24 +317,51 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
     return files;
 }
 
- function skipWhiteSpace(cpp_lexer: any){
-	
-	var token = cpp_lexer.next();
-	if (token === undefined) {return null;}
-	while (token.type === "WS") {
-		token = cpp_lexer.next();
-		if(token === undefined){return null;}
-	}
-	return token;
- }
-
  function god_class(classes: CppClass[], funcs:CppFunction[]){
+	/*
+		Description of antipattern
+
+	*/
+
+	const MAX_LENGTH = 500; // Need to decide on a value
+
+
 	console.log("god class not implemented");
 	//EASY - Routledge
  }
 
  function feature_envy(classes: CppClass[], funcs:CppFunction[]){
-	console.log("feature envy class not implemented");
+	/*
+		Description of antipattern
+
+		Papers:
+			https://ieeexplore.ieee.org/document/7051460
+			https://ieeexplore.ieee.org/document/4752842
+	*/
+	let W = 0.5;
+	let X = 0.5;
+
+	function CallSet(obj:string, func:CppFunction){
+		var v:any;
+		for (v in func){	
+			
+		}
+	}
+
+	function FeatureEnvyFactor(){
+
+	}
+
+
+	const MAX_FEATURES = 5;
+	
+	classes.forEach(c => {
+		c.functions.forEach(f => {
+			
+		});
+	});
+	
+	// console.log("feature envy class not implemented");
 	//EASY - Routledge
  }
 
