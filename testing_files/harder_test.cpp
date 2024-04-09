@@ -28,13 +28,16 @@ class TestClass {
 // Description of Anouter Class
 class AnoutherClass {
     public:
-        void undefinedMethod();
+        int x;
+        int *ptr;
+        void undefinedMethod(int x);
 
 };
 
-void AnoutherClass::undefinedMethod() {
+void AnoutherClass::undefinedMethod(int x) {
     std::cout << "Now Im Defined";
     std::string findMe = "I should be \" one \" string" + "I should be a seperate string" ;
+    this->x = x;
 }
 
 int main() {

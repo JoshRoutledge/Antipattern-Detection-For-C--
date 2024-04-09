@@ -16,6 +16,10 @@
       {
         "command": "antitest.checkantipatterns",
         "title": "Check for Antipatterns"
+      },
+      {
+        "command": "antitest.checkclasses",
+        "title": "Run Checker"
       }
     ]
   },
