@@ -22,7 +22,7 @@ public:
         std::cout << "Completing functionOne" << std::endl;
     }
 
-    void long_function(int with_parameters) {
+    void long_function_param(int with_parameters) {
         std::cout << "Starting functionTwo" << std::endl;
         std::vector<std::string> words = {"Adding", "more", "lines", "to", "functionTwo", "for", "testing"};
         int wordCount = 0;

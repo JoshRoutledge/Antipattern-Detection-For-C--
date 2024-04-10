@@ -97,6 +97,7 @@ export class CppFunction{
     functions: CppFunction[];
     func_calls: CppFunction[];
     unknown_func_calls: Variable[];
+	unknown_func_names: string[];
     parent_class: CppClass | null;
 
     constructor(name: string, c: CppClass | null, param: Variable[]){
@@ -108,6 +109,7 @@ export class CppFunction{
         this.functions = [];
         this.func_calls = [];
         this.unknown_func_calls = [];
+		this.unknown_func_names = [];
     }
 
     addLines(n: number){
@@ -159,6 +161,10 @@ export class CppFunction{
 
 	addAttributes(v: Variable){
 		this.attributes.push(v);
+	}
+
+	addFunctionName(n: string){
+		this.unknown_func_names.push(n);
 	}
 }
 

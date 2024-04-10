@@ -1,16 +1,16 @@
 #include <iostream>
 
-class TestClass {
-    int foo(int a, int b){
+class HardTestClass {
+    int foo_h(int a, int b){
         return a + b;
     }
 
-    int bar(int a){
+    int bar_h(int a){
         a = 15 - a;
-        return a + foo(3, 4);
+        return a + foo_h(3, 4);
     }
 
-    int buz(int a){
+    int buz_h(int a){
         int b = 0;
         if (a > 5){
             return 0;

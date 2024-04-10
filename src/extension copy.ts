@@ -262,7 +262,7 @@ export function activate(context: vscode.ExtensionContext) {
 						if (token.type === "lbracket"){
 							// console.log("This is a function declaration -> switch active function");
 							//TODO we need to get the correct name here
-							current_func = new CppFunction(temp.value, current_class);
+							// current_func = new CppFunction(temp.value, current_class);
 							console.log("Created function: " + temp.value);
 						}
 						else if (token.type === "endLine"){
@@ -290,7 +290,7 @@ export function activate(context: vscode.ExtensionContext) {
 						}
 
 						if (current_func !== null) {
-							current_func.addLines(1);
+							// current_func.addLines(1);
 						}
 						
 					}

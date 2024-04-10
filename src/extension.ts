@@ -4,8 +4,10 @@ import { readdir, readFile } from 'fs/promises';
 import * as path from 'path';
 // import {CppFunction} from "./CppFunction";
 import {CppClass, CppFunction, Variable} from "./CppClass";
+import { availableParallelism } from 'os';
 
 let DEBUG = true;
+let ONLYT = true;
 let all_classes: CppClass[] = [];
 let classless_functions: CppFunction[] = [];
 /*
@@ -92,7 +94,7 @@ export function activate(context: vscode.ExtensionContext) {
 			rbracket: '}',
 			endLine: ';',
 			includeStatement: /#include\s+<[A-Za-z]+>/,
-			keyword: ['return'],
+			keyword: ['return', 'while', 'if', 'for'],
 			class: {match: /class\s+[A-Za-z_]\w*/, value: (s: string) => s.replace(/class/, "").replace(/\s/g, "")},
 			func: [{match: /[A-Za-z]\w*\s[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => s.slice(s.split(" ")[0].length + 1).split(")")[0]},
 				   {match: /[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => s.split(")")[0]}],
@@ -100,8 +102,9 @@ export function activate(context: vscode.ExtensionContext) {
 			externalDefinition: {match: /\w+::\w+\s*\(\w*\)/},  	// scopeResolution for CLASS::METHOD() //TODO ADD
 			member_func: [{match: /\w+\.\w+\s*\(\w*\)/, value: (s: string) => s.replace(/\./, " ")}, // doesnt handle OBJ.FUNC1().FUNC2()
 					 {match: /\w+\-\>\w+\s*\(\w*\)/, value: (s: string) => s.replace(/\-\>/, " ")}],
+			func_call: {match: /[A-Za-z]\w*\(/},
 			member_var: [{match: /\w+\.\w+/, value: (s: string) => s.replace(/\./, " ")}, 
-					{match: /\w+\-\>\w+/, value: (s: string) => s.replace(/\-\>/, " ")}], 
+						{match: /\w+\-\>\w+/, value: (s: string) => s.replace(/\-\>/, " ")}], 
 			NL:      { match: /[\n\r]/, lineBreaks: true },
 			variableDeclaration: [{match: /\w+\s\w+/},
 								{match: /\w+(?:::\w+)+\<\w+(?:::\w+)+\>\s\w+/}
@@ -215,37 +218,37 @@ export function activate(context: vscode.ExtensionContext) {
 						if (current_class !== null) { current_class.addLines(1); }
 						break;
 
-						case 'member_func':
-							var split_str = token.value.split(" ", 2);
-							
-							if (current_func !== null) {
-								current_func.varToFunc(split_str[0], split_str[1]);
+					case 'member_func':
+						var split_str = token.value.split(" ", 2);
+						
+						if (current_func !== null) {
+							current_func.varToFunc(split_str[0], split_str[1]);
+						}
+						else if (current_class !== null) {
+							current_class.varToFunc(split_str[0], split_str[1]);
+						}
+						break;
+
+					case 'member_var':
+						var split_str = token.value.split(" ", 2);
+						var classType = "UNKNOWN";
+						var c:any;
+						for(c in all_classes){
+							if(c.name === split_str[1]){
+								classType = c.type;
 							}
-							else if (current_class !== null) {
-								current_class.varToFunc(split_str[0], split_str[1]);
-							}
-							break;
-	
-						case 'member_var':
-							var split_str = token.value.split(" ", 2);
-							var classType = "UNKNOWN";
-							var c:any;
-							for(c in all_classes){
-								if(c.name === split_str[1]){
-									classType = c.type;
-								}
-							}
-							var attribute:Variable = new Variable(classType, split_str[1]);
-							
-							if (current_func !== null) {
-								current_func.addAttributes(attribute);
-							}
-							else if (current_class !== null) {
-								current_class.addAttributes(attribute);
-							}
-							break;
+						}
+						var attribute:Variable = new Variable(classType, split_str[1]);
+						
+						if (current_func !== null) {
+							current_func.addAttributes(attribute);
+						}
+						else if (current_class !== null) {
+							current_class.addAttributes(attribute);
+						}
+						break;
 		
-						case 'variableDeclaration':
+					case 'variableDeclaration':
 						var split_str = token.value.split(" ", 2);
 						var attribute = new Variable(split_str[0], split_str[1]);
 
@@ -257,9 +260,11 @@ export function activate(context: vscode.ExtensionContext) {
 						}
 						break;
 
-					case 'variable':
-						
+					case 'variable':						
 						break;
+
+					case 'func_call':
+						current_func?.addFunctionName(token.value.slice(0, -1));
 
 					case 'ERROR':
 						DEBUG && console.log("An error occured while parsing: " + token.value);
@@ -280,17 +285,35 @@ export function activate(context: vscode.ExtensionContext) {
 
 	let disposable1 = vscode.commands.registerCommand('antitest.checkclasses', async () => {
 
-		// god_class(all_classes, classless_functions);
+		//placeholder may have a better location someday
+		all_classes.forEach(c => {
+			c.functions.forEach(f => {
+				f.unknown_func_names.forEach(ufn => {
+					//find correct function and add to f's functions
+
+					all_classes.forEach(c_fs => {
+						c_fs.functions.forEach(f_fs => {
+							if (ufn == f_fs.name) {
+								f.addFuncCall(f_fs);
+							}
+						});
+					});
+				});
+			});
+		});
+
+
+		god_class(all_classes, classless_functions);
 		feature_envy(all_classes, classless_functions);
-		// duplicate_code(all_classes, classless_functions);
-		// refused_bequest(all_classes, classless_functions;
-		// divergent_change(all_classes, classless_functions);
-		// shotgun_surgery(all_classes, classless_functions);
-		// parallel_inheritance(all_classes, classless_functions);
-		// functional_decomposition(all_classes, classless_functions);
-		// spaghetti_code(all_classes, classless_functions);
-		// swiss_army_knife(all_classes, classless_functions);
-		// type_checking(all_classes, classless_functions);
+		duplicate_code(all_classes, classless_functions);
+		refused_bequest(all_classes, classless_functions);
+		divergent_change(all_classes, classless_functions);
+		shotgun_surgery(all_classes, classless_functions);
+		parallel_inheritance(all_classes, classless_functions);
+		functional_decomposition(all_classes, classless_functions);
+		spaghetti_code(all_classes, classless_functions);
+		swiss_army_knife(all_classes, classless_functions);
+		type_checking(all_classes, classless_functions);
 	});
 
 	context.subscriptions.push(disposable1);
@@ -406,7 +429,6 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 	declaring long methods with no parameters,
 	utilizing global variables (this may need updates to the parser),
 	names of functions may suggest procedural programming (this would require too much work),
-
 	*/
 
 
@@ -416,29 +438,95 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 		c.functions.forEach(f => {
 			if (f.lines > SPAGHETTI_LINES) {
 				console.log(f.name + " has enough lines");
-				if (f.name.includes("()")){
+				if (f.parameters.length == 0){
 					console.log(f.name + " has no parameters");
 					n = n + 1;
 				}
 			}
 		});
-		if (n > SPAGHETTI_FUNCS) {
+		if (n >= SPAGHETTI_FUNCS) {
 			console.log(c.name + " exhibits spaghetti code antipattern");
 		}
 		else {
 			console.log(c.name + " does not exhibit spaghetti code");
 		}
 	});
-
-	//does it have long methods without parameters
-
-
-	//Easy - Peterson
  }
 
  function swiss_army_knife(classes: CppClass[], funcs:CppFunction[]){
 	console.log("swiss army knife not implemented");
+	const SAK_NUM_SETS = 2;
 	//Easy - Peterson
+
+	//All classes start in their own "group"
+	//Define operator join, example if A-1 B-1 C-2 D-3 join C and A results in A,B,C-2 D-3
+	//Simple algorithm join C, A get A's group and set all values with that group to C's group
+
+	classes.forEach(c => {
+
+		let uj: number[] = [];
+		for (let i = 0; i < classes.length; i++) {
+			uj.push(-1);
+		}
+
+		c.functions.forEach(f => {
+			let classesThatCallF: number[] = [];
+
+			//find all the classes that call this function join them
+			for (let j = 0; j < classes.length; j++) {
+				const element = classes[j];
+				for (let k = 0; k < element.functions.length; k++) {
+					const t = element.functions[k];
+					t.func_calls.forEach(e => {
+						//e is a function call from class j to function e
+						if (e.name == f.name) {
+							//we have found that class j calls function f track it
+							classesThatCallF.push(j);
+						}
+					});
+				}
+				
+			}
+
+			//we now have all classes that call F they must be in the same group, join them
+			for (let l = 0; l < classesThatCallF.length; l++) {
+				const element = classesThatCallF[l];
+				let a = classesThatCallF[0]; //index into uj
+				let b = classesThatCallF[l]; //index into uj
+
+				//join a and b
+				let a_value = uj[a];
+				let b_value = uj[b];
+
+				if (a_value == -1) {
+					a_value = a;
+					uj[a] == a_value;
+				}
+				if (b_value == -1) {
+					b_value = b;
+					uj[b] = b_value;
+				}
+
+				for (let m = 0; m < uj.length; m++) {
+					if (uj[m] == b_value) {
+						uj[m] = a_value;
+					}
+				}
+				
+			}
+		});
+
+		//we need to ensure classes that were never called are reset to be the same group -1
+		
+		//here we determine if c is a sak
+		const s = new Set(uj);
+		if (s.size > SAK_NUM_SETS) {
+			console.log(c.name + " may be a Swiss Army Knife")
+		}
+	})
+
+	//Now we should have the number of groups
+
  }
 
  function type_checking(classes: CppClass[], funcs:CppFunction[]){
