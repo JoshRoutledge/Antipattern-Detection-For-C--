@@ -5,6 +5,7 @@ import * as path from 'path';
 // import {CppFunction} from "./CppFunction";
 import {CppClass, CppFunction, Variable} from "./CppClass";
 import { availableParallelism } from 'os';
+import { assert } from 'console';
 
 let DEBUG = true;
 let ONLYT = true;
@@ -73,13 +74,13 @@ export function activate(context: vscode.ExtensionContext) {
 			'(',')', '[', ']', '{', '}',
 			',',':', '.', ';', '@', '->',
 			'+=','-=', '*=', '/=', '//=', '%=', '@=',
-			'&=','|=', '^=', '>>=', '<<=', '**=',
+			'&=','|=', '^=', '>>=', '<<=', '**=', '!',
 		  
 			// delimiters
 			'+','-', '**', '*', '//', '/', '%', // '@',
 			'<<','>>', '<=', '>=', '==', '!=',
 			'&','|', '^', '~',
-			'<','>',
+			'<','>', '&&', '||',
 		  
 			// another operator
 			'=',
@@ -94,7 +95,7 @@ export function activate(context: vscode.ExtensionContext) {
 			rbracket: '}',
 			endLine: ';',
 			includeStatement: /#include\s+<[A-Za-z]+>/,
-			keyword: ['return', 'while', 'if', 'for'],
+			keyword: ['return', 'while', 'if', 'for', 'else'],
 			class: {match: /class\s+[A-Za-z_]\w*/, value: (s: string) => s.replace(/class/, "").replace(/\s/g, "")},
 			func: [{match: /[A-Za-z]\w*\s[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => s.slice(s.split(" ")[0].length + 1).split(")")[0]},
 				   {match: /[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => s.split(")")[0]}],
@@ -265,6 +266,35 @@ export function activate(context: vscode.ExtensionContext) {
 
 					case 'func_call':
 						current_func?.addFunctionName(token.value.slice(0, -1));
+					
+					case 'keyword':
+						//here we want can go through the work of parsing in the conditional if the keyword is if or while?
+						//maybe count the number of operators as a heuristic for the type-checking thingy
+						if (token.value == "if") {
+							DEBUG && console.log("found an if");
+							next();
+							assert(token.value == "(", "if should be followed by (")
+							next();
+							let s = 0;
+							let paren_count = 1;
+							while (paren_count > 0) {
+								if (token.type == "op") {
+									s = s  + 1;
+									if (token.value == "(") {
+										paren_count = paren_count + 1;
+									}
+									if (token.value == ")") {
+										paren_count = paren_count - 1;
+										if (paren_count == 0) {
+											break;
+										}
+									}
+								}
+								next();
+							}
+							current_class?.addConditional(s);
+							assert(token.value == ")", "after parsing conditional should be )");
+						}
 
 					case 'ERROR':
 						DEBUG && console.log("An error occured while parsing: " + token.value);
@@ -448,13 +478,12 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 			console.log(c.name + " exhibits spaghetti code antipattern");
 		}
 		else {
-			console.log(c.name + " does not exhibit spaghetti code");
+			DEBUG && console.log(c.name + " does not exhibit spaghetti code");
 		}
 	});
  }
 
  function swiss_army_knife(classes: CppClass[], funcs:CppFunction[]){
-	console.log("swiss army knife not implemented");
 	const SAK_NUM_SETS = 2;
 	//Easy - Peterson
 
@@ -514,13 +543,12 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 				}
 				
 			}
+			console.log("for breakpoint");
 		});
-
-		//we need to ensure classes that were never called are reset to be the same group -1
 		
 		//here we determine if c is a sak
-		const s = new Set(uj);
-		if (s.size > SAK_NUM_SETS) {
+		const s = (new Set(uj)).size - 1; //used to count how many "groups" not counting the no call group
+		if (s >= SAK_NUM_SETS) {
 			console.log(c.name + " may be a Swiss Army Knife")
 		}
 	})
@@ -530,8 +558,20 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
  }
 
  function type_checking(classes: CppClass[], funcs:CppFunction[]){
-	console.log("type checking not implemented");
-	//Doesn't use parser
+	const TC_COMPLEX_THRESHOLD = 5;
+	const TC_NUMBER_CC_REQUIRED = 6;
+
+	let count = 0;
+	classes.forEach(c => {
+		c.conditionals.forEach(pcc => {
+			if (pcc >= TC_COMPLEX_THRESHOLD) {
+				count = count + 1;
+			}
+		});
+		if (count >= TC_NUMBER_CC_REQUIRED) {
+			console.log(c.name + " is an example of a type checking antipattern")
+		}
+	});
  }
 
 // This method is called when your extension is deactivated

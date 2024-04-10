@@ -16,6 +16,7 @@ export class CppClass {
     func_calls: CppFunction[];
     unknown_func_calls: Variable[];
     functions: CppFunction[];
+	conditionals: number[];
 
     constructor(name: string){
         this.name = name;
@@ -24,6 +25,7 @@ export class CppClass {
         this.functions = [];
         this.func_calls = [];
         this.unknown_func_calls = [];
+		this.conditionals = [];
     }
 
     addLines(n: number){
@@ -41,6 +43,10 @@ export class CppClass {
 	addFuncCall(f: CppFunction){
         this.func_calls.push(f);
     }
+
+	addConditional(n: number){
+		this.conditionals.push(n);
+	}
 
 	varToFunc(name:string, method:string){
 		var v:any;
