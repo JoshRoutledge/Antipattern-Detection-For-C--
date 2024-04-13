@@ -27,11 +27,34 @@ class HardTestClass {
 
 // Description of Anouter Class
 class AnoutherClass {
-    public:
-        int x;
+    private:
+        int quantity;
         int *ptr;
+        Item item;
+        ItemPanel itemPanel;
+
+    public:
         void undefinedMethod(int x);
 
+        Item getItem() {
+            return item
+        }
+
+        int getQuantity() {
+            return quantity
+        }
+
+        void updateItemPanel() {
+            Item item = getItem();
+            int q = getQuantity();
+            if(item == null){
+                itemPanel.clear();
+            } else {
+                itemPanel.setItem(item);
+                int inStock = Warehouse.getInstance().getQuantity(item);
+                itemPanel.setInStock(inStock);
+            }
+        }
 };
 
 void AnoutherClass::undefinedMethod(int x) {

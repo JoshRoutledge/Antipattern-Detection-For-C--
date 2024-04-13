@@ -49,12 +49,11 @@ export class CppClass {
 	}
 
 	varToFunc(name:string, method:string){
-		var v:any;
-		for(v in this.attributes){
+		this.attributes.forEach(v => {
 			if(v.name === name){
 				v.addFunctionCall(method);
 			}
-		}
+		});
 
 		// var attr:any;
 		// var classType = "UNKNOWN";
@@ -131,12 +130,23 @@ export class CppFunction{
     }
 
 	varToFunc(name:string, method:string){
-		var v:any;
+		var found = false;
 		this.attributes.forEach(v => {
 			if(v.name === name){
 				v.addFunctionCall(method);
+				found = true;
 			}
 		});
+
+		if(!found && this.parent_class){
+			this.parent_class.attributes.forEach(v => {
+				if(v.name === name){
+					var v_clone = new Variable(v.type, v.name);
+					v_clone.addFunctionCall(method);
+					this.addAttributes(v_clone);
+				}
+			});
+		}
 		// var attr:any;
 		// var classType = "UNKNOWN";
 		// for(attr in this.attributes){

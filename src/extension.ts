@@ -385,37 +385,44 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 
  function feature_envy(classes: CppClass[], funcs:CppFunction[]){
 	/*
-		Description of antipattern
+		Checks for feature envy between classes.
+		Feature envy occurs when a method in one class relies too heavily on methods 
+		from another class.
 
-		Papers:
-			https://ieeexplore.ieee.org/document/7051460
-			https://ieeexplore.ieee.org/document/4752842
+		Formula based on this research paper: https://ieeexplore.ieee.org/document/7051460
 	*/
+	//Predefined threshhold weight: W and base: X
 	let W = 0.5;
 	let X = 0.5;
-
-	function CallSet(obj:string, func:CppFunction){
-		var v:any;
-		for (v in func){	
-			
-		}
-	}
-
-	function FeatureEnvyFactor(){
-
-	}
-
-
-	const MAX_FEATURES = 5;
+	let THRESHOLD = 0.65;
 	
 	classes.forEach(c => {
-		c.functions.forEach(f => {
-			
+		c.functions.forEach(func => {
+			var attribute_methods:number[] = [];
+			var total = func.func_calls.length || 0;
+			var max = 0;
+
+			func.attributes.forEach( attr =>{
+				var count = attr.func_calls.length;
+				attribute_methods.push(count);
+				total += count;
+			});
+
+			if(total !== 0){
+				attribute_methods.forEach( M => {
+					var envy_factor = W * (M / total) + (1 - W) * (1 - (Math.pow(X, M)));
+					if(envy_factor > max){
+						max = envy_factor;
+						// DEBUG && console.log(`${func.name} envy factor increased to ${max}`);
+					}
+				});
+			}
+			DEBUG && console.log(`${func.name} has an envy factor of ${max}`);
+			if(max > THRESHOLD){
+				console.log(`Feature envy found in ${c.name}'s function ${func.name}`);
+			}
 		});
 	});
-	
-	// console.log("feature envy class not implemented");
-	//EASY - Routledge
  }
 
  function duplicate_code(classes: CppClass[], funcs:CppFunction[]){
