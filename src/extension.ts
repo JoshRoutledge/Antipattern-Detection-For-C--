@@ -6,11 +6,17 @@ import * as path from 'path';
 import {CppClass, CppFunction, Variable} from "./CppClass";
 import { availableParallelism } from 'os';
 import { assert } from 'console';
+import { maxHeaderSize } from 'http';
 
-let DEBUG = true;
+let DEBUG = false;
 let ONLYT = true;
+const SAK_NUM_SETS = 2;
+const FE_THRESHOLD = 0.65;
 let all_classes: CppClass[] = [];
 let classless_functions: CppFunction[] = [];
+let SAK_scores: number[] = [];
+let feature_envy_score: number[] = [];
+
 /*
 	Primatives :
 	"int",
@@ -99,8 +105,7 @@ export function activate(context: vscode.ExtensionContext) {
 			class: {match: /class\s+[A-Za-z_]\w*/, value: (s: string) => s.replace(/class/, "").replace(/\s/g, "")},
 			func: [{match: /[A-Za-z]\w*\s[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => s.slice(s.split(" ")[0].length + 1).split(")")[0]},
 				   {match: /[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => s.split(")")[0]}],
-			// func: {match: /[A-Za-z]\w*\([\w\s,]*\)/},
-			externalDefinition: {match: /\w+::\w+\s*\(\w*\)/},  	// scopeResolution for CLASS::METHOD() //TODO ADD
+			externalDefinition: {match: /\w+::\w+\s*\(\w*\)/},  
 			member_func: [{match: /\w+\.\w+\s*\(\w*\)/, value: (s: string) => s.replace(/\./, " ")}, // doesnt handle OBJ.FUNC1().FUNC2()
 					 {match: /\w+\-\>\w+\s*\(\w*\)/, value: (s: string) => s.replace(/\-\>/, " ")}],
 			func_call: {match: /[A-Za-z]\w*\(/},
@@ -108,17 +113,12 @@ export function activate(context: vscode.ExtensionContext) {
 						{match: /\w+\-\>\w+/, value: (s: string) => s.replace(/\-\>/, " ")}], 
 			NL:      { match: /[\n\r]/, lineBreaks: true },
 			variableDeclaration: [{match: /\w+\s\w+/},
-								{match: /\w+(?:::\w+)+\<\w+(?:::\w+)+\>\s\w+/}
-								// {match: /[\w(\:\:)]+\<[\w(\:\:)]+\>\s\w+/}
-			],
+								{match: /\w+(?:::\w+)+\<\w+(?:::\w+)+\>\s\w+/}],
 			variable: [{match: /\w+::\w+/},
 					   {match: /::\w*/, value: (s: string) => s.slice(2)},
 					   { match: /\w+/}],
-			// scopeResolution: ,  	// scopeResolution for CLASS::METHOD such as std::endl but could also be a variable //TODO ADD
 			op: opPat,
 			ERROR: moo.error,
-			// Namespace
-			// Inheritence
 		});
 		
 		const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -137,8 +137,11 @@ export function activate(context: vscode.ExtensionContext) {
 		const workspaceFolder = workspaceFolders[0].uri.fsPath;
 		const files = await readFilesInDirectory(workspaceFolder);
 
+		let files_complete = 0;
+
 		// Print file names
 		files.forEach(file => {
+			let file_count = files.length;
 			vscode.workspace.openTextDocument(file).then((document) => {
 				let rawText = document.getText();
 				cpp_lexer.reset(rawText);
@@ -266,26 +269,26 @@ export function activate(context: vscode.ExtensionContext) {
 
 					case 'func_call':
 						current_func?.addFunctionName(token.value.slice(0, -1));
+						break;
 					
 					case 'keyword':
 						//here we want can go through the work of parsing in the conditional if the keyword is if or while?
 						//maybe count the number of operators as a heuristic for the type-checking thingy
-						if (token.value == "if") {
-							DEBUG && console.log("found an if");
+						if (token.value === "if") {
 							next();
-							assert(token.value == "(", "if should be followed by (")
+							assert(token.value === "(", "if should be followed by (")
 							next();
 							let s = 0;
 							let paren_count = 1;
 							while (paren_count > 0) {
-								if (token.type == "op") {
+								if (token.type === "op") {
 									s = s  + 1;
-									if (token.value == "(") {
+									if (token.value === "(") {
 										paren_count = paren_count + 1;
 									}
-									if (token.value == ")") {
+									if (token.value === ")") {
 										paren_count = paren_count - 1;
-										if (paren_count == 0) {
+										if (paren_count === 0) {
 											break;
 										}
 									}
@@ -293,8 +296,9 @@ export function activate(context: vscode.ExtensionContext) {
 								next();
 							}
 							current_class?.addConditional(s);
-							assert(token.value == ")", "after parsing conditional should be )");
+							assert(token.value === ")", "after parsing conditional should be )");
 						}
+						break;
 
 					case 'ERROR':
 						DEBUG && console.log("An error occured while parsing: " + token.value);
@@ -306,7 +310,10 @@ export function activate(context: vscode.ExtensionContext) {
 
 					next();
 				}
-				
+				files_complete += 1;
+				if(files_complete === file_count){
+					console.log('Parsing Complete');
+				}
 			});
 			DEBUG && console.log(file);
 		});
@@ -323,7 +330,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 					all_classes.forEach(c_fs => {
 						c_fs.functions.forEach(f_fs => {
-							if (ufn == f_fs.name) {
+							if (ufn === f_fs.name) {
 								f.addFuncCall(f_fs);
 							}
 						});
@@ -332,8 +339,6 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 		});
 
-
-		god_class(all_classes, classless_functions);
 		feature_envy(all_classes, classless_functions);
 		duplicate_code(all_classes, classless_functions);
 		refused_bequest(all_classes, classless_functions);
@@ -344,6 +349,7 @@ export function activate(context: vscode.ExtensionContext) {
 		spaghetti_code(all_classes, classless_functions);
 		swiss_army_knife(all_classes, classless_functions);
 		type_checking(all_classes, classless_functions);
+		god_class(all_classes, classless_functions);
 	});
 
 	context.subscriptions.push(disposable1);
@@ -372,15 +378,23 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 
  function god_class(classes: CppClass[], funcs:CppFunction[]){
 	/*
-		Description of antipattern
-
+		Checks for the presence of a god class.
+		A god class may be present if a class meets the thresholds for both
+		Feature Envy and Swiss Army Knife.
 	*/
+	let god_class_found = false;
+	for(let i = 0; i < all_classes.length; i++){
+		if (SAK_scores[i] > SAK_NUM_SETS) {
+			if(feature_envy_score[i] > FE_THRESHOLD){
+				god_class_found = true;
+				console.log(`${all_classes[i].name} may be a god class.`);
+			}
+		}
+	}
 
-	const MAX_LENGTH = 500; // Need to decide on a value
-
-
-	console.log("god class not implemented");
-	//EASY - Routledge
+	if(!god_class_found){
+		console.log('This project does not contain a god class.');
+	}
  }
 
  function feature_envy(classes: CppClass[], funcs:CppFunction[]){
@@ -394,13 +408,13 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 	//Predefined threshhold weight: W and base: X
 	let W = 0.5;
 	let X = 0.5;
-	let THRESHOLD = 0.65;
 	
 	classes.forEach(c => {
+		var class_max = 0;
 		c.functions.forEach(func => {
 			var attribute_methods:number[] = [];
 			var total = func.func_calls.length || 0;
-			var max = 0;
+			var func_max = 0;
 
 			func.attributes.forEach( attr =>{
 				var count = attr.func_calls.length;
@@ -411,47 +425,51 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 			if(total !== 0){
 				attribute_methods.forEach( M => {
 					var envy_factor = W * (M / total) + (1 - W) * (1 - (Math.pow(X, M)));
-					if(envy_factor > max){
-						max = envy_factor;
+					if(envy_factor > func_max){
+						func_max = envy_factor;
 						// DEBUG && console.log(`${func.name} envy factor increased to ${max}`);
 					}
 				});
 			}
-			DEBUG && console.log(`${func.name} has an envy factor of ${max}`);
-			if(max > THRESHOLD){
+			DEBUG && console.log(`${func.name} has an envy factor of ${func_max}`);
+			if(func_max > FE_THRESHOLD){
 				console.log(`Feature envy found in ${c.name}'s function ${func.name}`);
 			}
+			if(func_max > class_max){
+				class_max = func_max;
+			}
 		});
+		feature_envy_score.push(class_max);
 	});
  }
 
  function duplicate_code(classes: CppClass[], funcs:CppFunction[]){
-	console.log("duplicate code class not implemented");
+	DEBUG && console.log("duplicate code class not implemented");
 	//Doesn't use parser...
  }
 
  function refused_bequest(classes: CppClass[], funcs:CppFunction[]){
-	console.log("refused bequest class not implemented");
+	DEBUG && console.log("refused bequest class not implemented");
 	//Inheritance.. oof
  }
 
  function divergent_change(classes: CppClass[], funcs:CppFunction[]){
-	console.log("diveregent change class not implemented");
+	DEBUG && console.log("diveregent change class not implemented");
 	//Difficult update parser
  }
 
  function shotgun_surgery(classes: CppClass[], funcs:CppFunction[]){
-	console.log("shotgun surgery class not implemented");
+	DEBUG && console.log("shotgun surgery class not implemented");
 	//Difficult update parser
  }
 
  function parallel_inheritance(classes: CppClass[], funcs:CppFunction[]){
-	console.log("parallel inher not implemented");
+	DEBUG && console.log("parallel inher not implemented");
 	//inheritance
  }
 
  function functional_decomposition(classes: CppClass[], funcs:CppFunction[]){
-	console.log("functional decomp not implemented");
+	DEBUG && console.log("functional decomp not implemented");
 
  }
 
@@ -474,9 +492,9 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 		let n = 0;
 		c.functions.forEach(f => {
 			if (f.lines > SPAGHETTI_LINES) {
-				console.log(f.name + " has enough lines");
-				if (f.parameters.length == 0){
-					console.log(f.name + " has no parameters");
+				DEBUG && console.log(f.name + " has enough lines");
+				if (f.parameters.length === 0){
+					DEBUG && console.log(f.name + " has no parameters");
 					n = n + 1;
 				}
 			}
@@ -491,7 +509,6 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
  }
 
  function swiss_army_knife(classes: CppClass[], funcs:CppFunction[]){
-	const SAK_NUM_SETS = 2;
 	//Easy - Peterson
 
 	//All classes start in their own "group"
@@ -515,7 +532,7 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 					const t = element.functions[k];
 					t.func_calls.forEach(e => {
 						//e is a function call from class j to function e
-						if (e.name == f.name) {
+						if (e.name === f.name) {
 							//we have found that class j calls function f track it
 							classesThatCallF.push(j);
 						}
@@ -534,31 +551,31 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 				let a_value = uj[a];
 				let b_value = uj[b];
 
-				if (a_value == -1) {
+				if (a_value === -1) {
 					a_value = a;
-					uj[a] == a_value;
+					uj[a] === a_value;
 				}
-				if (b_value == -1) {
+				if (b_value === -1) {
 					b_value = b;
 					uj[b] = b_value;
 				}
 
 				for (let m = 0; m < uj.length; m++) {
-					if (uj[m] == b_value) {
+					if (uj[m] === b_value) {
 						uj[m] = a_value;
 					}
 				}
 				
 			}
-			console.log("for breakpoint");
 		});
 		
 		//here we determine if c is a sak
 		const s = (new Set(uj)).size - 1; //used to count how many "groups" not counting the no call group
 		if (s >= SAK_NUM_SETS) {
-			console.log(c.name + " may be a Swiss Army Knife")
+			console.log(c.name + " may be a Swiss Army Knife");
 		}
-	})
+		SAK_scores.push(s);
+	});
 
 	//Now we should have the number of groups
 
@@ -576,7 +593,7 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
 			}
 		});
 		if (count >= TC_NUMBER_CC_REQUIRED) {
-			console.log(c.name + " is an example of a type checking antipattern")
+			console.log(c.name + " is an example of a type checking antipattern");
 		}
 	});
  }

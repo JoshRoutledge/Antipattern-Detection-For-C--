@@ -15,11 +15,11 @@
     "commands": [
       {
         "command": "antitest.checkantipatterns",
-        "title": "Check for Antipatterns"
+        "title": "Parse Files"
       },
       {
         "command": "antitest.checkclasses",
-        "title": "Run Checker"
+        "title": "Check for Antipatterns"
       }
     ]
   },

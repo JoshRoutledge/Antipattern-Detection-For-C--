@@ -54,33 +54,6 @@ export class CppClass {
 				v.addFunctionCall(method);
 			}
 		});
-
-		// var attr:any;
-		// var classType = "UNKNOWN";
-		// for(attr in this.attributes){
-		// 	if(attr.name === name){
-		// 		classType = attr.type;
-		// 		break;
-		// 	}
-		// }
-		// if (classType === "UNKNOWN"){
-		// 	this.unknown_func_calls.push(new Variable(name, method));
-		// 	return;
-		// }
-		
-		// var cc:any;
-		// for(cc in all_classes){
-		// 	if(cc.name === classType){
-		// 		classType = attr.type;
-		// 		var cf:any;
-		// 		for(cf in cc.functions){
-		// 			if(cf.name === method){
-		// 				this.addFuncCall(cf);
-		// 				return;
-		// 			}
-		// 		}
-		// 	}
-		// }
 	}
 }
 
@@ -147,32 +120,6 @@ export class CppFunction{
 				}
 			});
 		}
-		// var attr:any;
-		// var classType = "UNKNOWN";
-		// for(attr in this.attributes){
-		// 	if(attr.name === name){
-		// 		classType = attr.type;
-		// 		break;
-		// 	}
-		// }
-		// if (classType === "UNKNOWN"){
-		// 	this.unknown_func_calls.push(new Variable(name, method));
-		// 	return;
-		// }
-		
-		// var cc:any;
-		// for(cc in all_classes){
-		// 	if(cc.name === classType){
-		// 		classType = attr.type;
-		// 		var cf:any;
-		// 		for(cf in cc.functions){
-		// 			if(cf.name === method){
-		// 				this.addFuncCall(cf);
-		// 				return;
-		// 			}
-		// 		}
-		// 	}
-		// }
 	}
 
 	addAttributes(v: Variable){
