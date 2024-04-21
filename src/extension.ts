@@ -383,7 +383,7 @@ async function readFilesInDirectory(dir: string): Promise<string[]> {
  function god_class(classes: CppClass[], funcs:CppFunction[]){
 	let god_class_found = false;
 	for(let i = 0; i < all_classes.length; i++){
-		if (SAK_scores[i] > SAK_NUM_SETS) {
+		if (SAK_scores[i] >= SAK_NUM_SETS) {
 			if(feature_envy_score[i] > FE_THRESHOLD){
 				god_class_found = true;
 				console.log(`${all_classes[i].name} may be a god class.`);
