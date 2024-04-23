@@ -78,6 +78,7 @@ export function activate(context: vscode.ExtensionContext) {
 		  ];
 
 		// Our lexer definition with the rules for tokenizing the input
+		
 		let cpp_lexer = moo.compile({
 			WS:      {match: /\s+/, lineBreaks: true},
 			comment: [{match: /\/\/.*?$/},
@@ -88,11 +89,13 @@ export function activate(context: vscode.ExtensionContext) {
 			endLine: ';',
 			includeStatement: /#include\s+<[A-Za-z]+>/,
 			keyword: ['return', 'while', 'if', 'for', 'else'],
-			class: {match: /class\s+[A-Za-z_]\w*/, value: (s: string) => s.replace(/class/, "").replace(/\s/g, "")},
-			func: [{match: /[A-Za-z]\w*\s[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => s.slice(s.split(" ")[0].length + 1).split(")")[0]},
+			class: {match: /class\s+[A-Za-z_]\w*/, value: (s: string) => 
+						s.replace(/class/, "").replace(/\s/g, "")},
+			func: [{match: /[A-Za-z]\w*\s[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => 
+						s.slice(s.split(" ")[0].length + 1).split(")")[0]},
 				   {match: /[A-Za-z]\w*\([\w\s,]*\)\s?\{/, value: (s:string) => s.split(")")[0]}],
 			externalDefinition: {match: /\w+::\w+\s*\(\w*\)/},  
-			member_func: [{match: /\w+\.\w+\s*\(\w*\)/, value: (s: string) => s.replace(/\./, " ")}, // doesnt handle OBJ.FUNC1().FUNC2()
+			member_func: [{match: /\w+\.\w+\s*\(\w*\)/, value: (s: string) => s.replace(/\./, " ")}, 
 					 {match: /\w+\-\>\w+\s*\(\w*\)/, value: (s: string) => s.replace(/\-\>/, " ")}],
 			func_call: {match: /[A-Za-z]\w*\(/},
 			member_var: [{match: /\w+\.\w+/, value: (s: string) => s.replace(/\./, " ")}, 
